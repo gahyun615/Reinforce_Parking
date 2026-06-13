@@ -248,7 +248,7 @@ def main():
     # ---- Single algorithm evaluation ----
     if args.algo and args.ckpt:
         discrete = (args.algo == "dqn")
-        env = ParkingEnv(discrete=discrete, noise_std=args.noise_std)
+        env = ParkingEnv(discrete=discrete, noise_std=args.noise_std, render_mode="human")
         obs_dim = env.observation_space.shape[0]
 
         agent = load_agent(args.algo, args.ckpt, obs_dim, env, args.device)
