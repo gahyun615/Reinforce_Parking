@@ -44,8 +44,8 @@ class ParkingEnv(gym.Env):
     N_DISCRETE_ACTIONS = len(DISCRETE_ACTIONS)
 
     # Success thresholds
-    SUCCESS_DIST    = 0.15   # metres  (normalised space)
-    SUCCESS_HEADING = 0.15   # radians (~8.6 deg) in cos/sin error
+    SUCCESS_DIST    = 0.02   # metres  (normalised space)
+    SUCCESS_HEADING = 0.08   # radians (~8.6 deg) in cos/sin error
     SUCCESS_SPEED   = 0.05   # normalised speed
 
     def __init__(
@@ -120,6 +120,9 @@ class ParkingEnv(gym.Env):
         # Terminate on collision or max steps
         if info.get("crashed", False):
             terminated = True
+        if self.is_success(obs, info):
+            terminated = True
+            info["is_success"] = True
         if self._step_count >= self.max_steps:
             truncated = True
 
