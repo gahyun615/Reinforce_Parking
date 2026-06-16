@@ -14,6 +14,7 @@ import argparse
 import os
 import subprocess
 import sys
+import importlib.util
 
 import torch
 
@@ -40,6 +41,21 @@ def run_cmd(cmd: list[str]):
     print("RUN:", " ".join(cmd))
     print("=" * 80)
     subprocess.run(cmd, check=True)
+
+
+def print_video_backend_status():
+    """
+    Print whether mp4 backend dependency is available.
+    record.py will fall back to gif when mp4 backend is unavailable.
+    """
+    has_ffmpeg_backend = importlib.util.find_spec("imageio_ffmpeg") is not None
+    if has_ffmpeg_backend:
+        print("[VIDEO] imageio-ffmpeg detected: mp4 recording is available.")
+    else:
+        print(
+            "[VIDEO] imageio-ffmpeg not found: record.py will save gif fallback "
+            "if mp4 writer is unavailable."
+        )
 
 
 def parse_args():
@@ -70,6 +86,7 @@ def parse_args():
 def main():
     args = parse_args()
     args.device = resolve_device(args.device)
+    print_video_backend_status()
     os.makedirs(args.log_dir, exist_ok=True)
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -106,17 +123,20 @@ def main():
                 print(f"[SKIP] record {algo}: checkpoint not found at {ckpt_path}")
                 continue
 
-            run_cmd([
-                sys.executable,
-                "record.py",
-                "--algo", algo,
-                "--ckpt", ckpt_path,
-                "--n_episodes", str(args.record_episodes),
-                "--output_dir", args.output_dir,
-                "--fps", str(args.fps),
-                "--noise_std", str(args.noise_std),
-                "--device", args.device,
-            ])
+            try:
+                run_cmd([
+                    sys.executable,
+                    "record.py",
+                    "--algo", algo,
+                    "--ckpt", ckpt_path,
+                    "--n_episodes", str(args.record_episodes),
+                    "--output_dir", args.output_dir,
+                    "--fps", str(args.fps),
+                    "--noise_std", str(args.noise_std),
+                    "--device", args.device,
+                ])
+            except subprocess.CalledProcessError:
+                print(f"[SKIP] record {algo}: recording failed (see logs above).")
 
     print("\nPipeline finished.")
 

@@ -9,6 +9,7 @@ Usage:
 
 import os
 import argparse
+import sys
 import numpy as np
 import imageio
 
@@ -21,6 +22,25 @@ from agents.double_dqn import DoubleDQNAgent
 from agents.reinforce import REINFORCEAgent
 from agents.a2c import A2CAgent
 from agents.ppo import PPOAgent
+from agents.checkpoint_utils import CheckpointMismatchError
+
+
+def save_frames(out_path: str, frames, fps: int) -> str:
+    """
+    Save frames as mp4 when ffmpeg is available.
+    Falls back to gif when mp4 writer is unavailable.
+    Returns the actual saved path.
+    """
+    try:
+        # Force ffmpeg plugin so imageio does not choose a non-video writer.
+        imageio.mimsave(out_path, frames, fps=fps, format="FFMPEG")
+        return out_path
+    except Exception as e:
+        gif_path = os.path.splitext(out_path)[0] + ".gif"
+        # GIF expects duration per frame (seconds), not fps.
+        imageio.mimsave(gif_path, frames, duration=1.0 / max(fps, 1))
+        print(f"  [WARN] mp4 save failed ({e}). Saved gif instead: {gif_path}")
+        return gif_path
 
 
 def load_agent(algo, ckpt_path, obs_dim, env, device):
@@ -45,7 +65,12 @@ def record_episodes(algo, ckpt_path, n_episodes, output_dir, device, noise_std, 
     env = ParkingEnv(discrete=discrete, noise_std=noise_std, render_mode="rgb_array")
     obs_dim = env.observation_space.shape[0]
 
-    agent = load_agent(algo, ckpt_path, obs_dim, env, device)
+    try:
+        agent = load_agent(algo, ckpt_path, obs_dim, env, device)
+    except CheckpointMismatchError as e:
+        print(f"[ERROR] {e}")
+        env.close()
+        sys.exit(1)
     print(f"Loaded {algo.upper()} from {ckpt_path}")
 
     for ep in range(n_episodes):
@@ -73,8 +98,8 @@ def record_episodes(algo, ckpt_path, n_episodes, output_dir, device, noise_std, 
 
         out_path = os.path.join(output_dir, f"{algo}_ep{ep+1}_{status}.mp4")
         if frames:
-            imageio.mimsave(out_path, frames, fps=fps)
-            print(f"  Episode {ep+1}: reward={ep_reward:.1f}  {status}  -> {out_path}")
+            saved_path = save_frames(out_path, frames, fps)
+            print(f"  Episode {ep+1}: reward={ep_reward:.1f}  {status}  -> {saved_path}")
         else:
             print(f"  Episode {ep+1}: no frames captured")
 

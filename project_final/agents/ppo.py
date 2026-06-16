@@ -11,6 +11,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.distributions import Normal
 
+from agents.checkpoint_utils import validate_obs_dim
+
 
 # ------------------------------------------------------------------
 # Actor-Critic Network (shared backbone)
@@ -113,6 +115,7 @@ class PPOAgent:
         batch_size:    int   = 64,     # minibatch size
         device:        str   = "cpu",
     ):
+        self.obs_dim       = obs_dim
         self.gamma         = gamma
         self.gae_lambda    = gae_lambda
         self.clip_eps      = clip_eps
@@ -255,6 +258,7 @@ class PPOAgent:
 
     def save(self, path: str):
         torch.save({
+            "obs_dim": self.obs_dim,
             "ac":        self.ac.state_dict(),
             "optimizer": self.optimizer.state_dict(),
             "step":      self._step,
@@ -262,6 +266,7 @@ class PPOAgent:
 
     def load(self, path: str):
         ckpt = torch.load(path, map_location=self.device)
+        validate_obs_dim(ckpt, self.obs_dim, "ppo")
         self.ac.load_state_dict(ckpt["ac"])
         self.optimizer.load_state_dict(ckpt["optimizer"])
         self._step = ckpt["step"]

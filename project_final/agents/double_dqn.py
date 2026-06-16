@@ -11,6 +11,8 @@ import torch.optim as optim
 from collections import deque
 import random
 
+from agents.checkpoint_utils import validate_obs_dim
+
 
 class QNetwork(nn.Module):
     def __init__(self, obs_dim: int, n_actions: int, hidden_dim: int = 256):
@@ -64,6 +66,7 @@ class DoubleDQNAgent:
         target_update: int = 500,
         device: str = "cpu",
     ):
+        self.obs_dim = obs_dim
         self.n_actions = n_actions
         self.gamma = gamma
         self.epsilon = epsilon_start
@@ -133,6 +136,7 @@ class DoubleDQNAgent:
 
     def save(self, path: str):
         torch.save({
+            "obs_dim": self.obs_dim,
             "q_net": self.q_net.state_dict(),
             "optimizer": self.optimizer.state_dict(),
             "step": self._step,
@@ -141,6 +145,7 @@ class DoubleDQNAgent:
 
     def load(self, path: str):
         ckpt = torch.load(path, map_location=self.device)
+        validate_obs_dim(ckpt, self.obs_dim, "double_dqn")
         self.q_net.load_state_dict(ckpt["q_net"])
         self.target_net.load_state_dict(ckpt["q_net"])
         self.optimizer.load_state_dict(ckpt["optimizer"])
