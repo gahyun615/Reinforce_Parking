@@ -10,6 +10,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.distributions import Normal
 
+from agents.checkpoint_utils import validate_obs_dim
+
 
 class PolicyNet(nn.Module):
     def __init__(self, obs_dim: int, action_dim: int, hidden_dim: int = 256):
@@ -61,6 +63,7 @@ class REINFORCEAgent:
         max_grad_norm: float = 0.5,
         device: str = "cpu",
     ):
+        self.obs_dim = obs_dim
         self.gamma = gamma
         self.entropy_coef = entropy_coef
         self.max_grad_norm = max_grad_norm
@@ -130,6 +133,7 @@ class REINFORCEAgent:
 
     def save(self, path: str):
         torch.save({
+            "obs_dim": self.obs_dim,
             "policy": self.policy.state_dict(),
             "optimizer": self.optimizer.state_dict(),
             "step": self._step,
@@ -137,6 +141,7 @@ class REINFORCEAgent:
 
     def load(self, path: str):
         ckpt = torch.load(path, map_location=self.device)
+        validate_obs_dim(ckpt, self.obs_dim, "reinforce")
         self.policy.load_state_dict(ckpt["policy"])
         self.optimizer.load_state_dict(ckpt["optimizer"])
         self._step = ckpt["step"]

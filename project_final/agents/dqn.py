@@ -12,6 +12,8 @@ import torch.optim as optim
 from collections import deque
 import random
 
+from agents.checkpoint_utils import validate_obs_dim
+
 
 # ------------------------------------------------------------------
 # Q-Network
@@ -77,6 +79,7 @@ class DQNAgent:
         target_update: int   = 500,      # steps between target net sync
         device:        str   = "cpu",
     ):
+        self.obs_dim       = obs_dim
         self.n_actions     = n_actions
         self.gamma         = gamma
         self.epsilon       = epsilon_start
@@ -154,6 +157,7 @@ class DQNAgent:
 
     def save(self, path: str):
         torch.save({
+            "obs_dim":   self.obs_dim,
             "q_net":     self.q_net.state_dict(),
             "optimizer": self.optimizer.state_dict(),
             "step":      self._step,
@@ -162,6 +166,7 @@ class DQNAgent:
 
     def load(self, path: str):
         ckpt = torch.load(path, map_location=self.device)
+        validate_obs_dim(ckpt, self.obs_dim, "dqn")
         self.q_net.load_state_dict(ckpt["q_net"])
         self.target_net.load_state_dict(ckpt["q_net"])
         self.optimizer.load_state_dict(ckpt["optimizer"])

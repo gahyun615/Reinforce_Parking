@@ -32,6 +32,7 @@ from agents.double_dqn import DoubleDQNAgent
 from agents.reinforce import REINFORCEAgent
 from agents.a2c import A2CAgent
 from agents.ppo import PPOAgent
+from agents.checkpoint_utils import CheckpointMismatchError
 
 
 # ------------------------------------------------------------------
@@ -322,7 +323,12 @@ def main():
         env = ParkingEnv(discrete=discrete, noise_std=args.noise_std, render_mode="human")
         obs_dim = env.observation_space.shape[0]
 
-        agent = load_agent(args.algo, args.ckpt, obs_dim, env, args.device)
+        try:
+            agent = load_agent(args.algo, args.ckpt, obs_dim, env, args.device)
+        except CheckpointMismatchError as e:
+            print(f"\n[ERROR] {e}")
+            env.close()
+            return
         print(f"\nEvaluating {args.algo.upper()} for {args.n_episodes} episodes...")
         result = evaluate_agent(env, agent, args.algo, args.n_episodes)
 
@@ -354,7 +360,13 @@ def main():
             env = ParkingEnv(discrete=discrete, noise_std=args.noise_std)
             obs_dim = env.observation_space.shape[0]
 
-            agent = load_agent(algo, ckpt_path, obs_dim, env, args.device)
+            try:
+                agent = load_agent(algo, ckpt_path, obs_dim, env, args.device)
+            except CheckpointMismatchError as e:
+                print(f"[SKIP] {algo}: {e}")
+                env.close()
+                continue
+
             print(f"Evaluating {algo.upper()}...")
             results[algo] = evaluate_agent(env, agent, algo, args.n_episodes)
             env.close()
