@@ -17,6 +17,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from env.parking_env import ParkingEnv
 from agents.dqn import DQNAgent
+from agents.double_dqn import DoubleDQNAgent
+from agents.reinforce import REINFORCEAgent
 from agents.a2c import A2CAgent
 from agents.ppo import PPOAgent
 
@@ -24,6 +26,10 @@ from agents.ppo import PPOAgent
 def load_agent(algo, ckpt_path, obs_dim, env, device):
     if algo == "dqn":
         agent = DQNAgent(obs_dim=obs_dim, n_actions=env.N_DISCRETE_ACTIONS, device=device)
+    elif algo == "double_dqn":
+        agent = DoubleDQNAgent(obs_dim=obs_dim, n_actions=env.N_DISCRETE_ACTIONS, device=device)
+    elif algo == "reinforce":
+        agent = REINFORCEAgent(obs_dim=obs_dim, action_dim=env.action_space.shape[0], device=device)
     elif algo == "a2c":
         agent = A2CAgent(obs_dim=obs_dim, action_dim=env.action_space.shape[0], device=device)
     elif algo == "ppo":
@@ -35,7 +41,7 @@ def load_agent(algo, ckpt_path, obs_dim, env, device):
 def record_episodes(algo, ckpt_path, n_episodes, output_dir, device, noise_std, fps):
     os.makedirs(output_dir, exist_ok=True)
 
-    discrete = (algo == "dqn")
+    discrete = (algo in ["dqn", "double_dqn"])
     env = ParkingEnv(discrete=discrete, noise_std=noise_std, render_mode="rgb_array")
     obs_dim = env.observation_space.shape[0]
 
@@ -53,7 +59,7 @@ def record_episodes(algo, ckpt_path, n_episodes, output_dir, device, noise_std, 
             if frame is not None:
                 frames.append(frame)
 
-            if algo == "dqn":
+            if algo in ["dqn", "double_dqn"]:
                 action = agent.select_action(obs, training=False)
             else:
                 action, _, _ = agent.select_action(obs, training=False)
@@ -79,13 +85,13 @@ def record_episodes(algo, ckpt_path, n_episodes, output_dir, device, noise_std, 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--algo",       type=str, required=True,
-                        choices=["dqn", "a2c", "ppo"])
+                        choices=["dqn", "double_dqn", "reinforce", "a2c", "ppo"])
     parser.add_argument("--ckpt",       type=str, required=True)
     parser.add_argument("--n_episodes", type=int, default=5)
     parser.add_argument("--output_dir", type=str, default="videos")
     parser.add_argument("--fps",        type=int, default=30)
     parser.add_argument("--noise_std",  type=float, default=0.02)
-    parser.add_argument("--device",     type=str, default="cpu")
+    parser.add_argument("--device",     type=str, default="cuda")
     return parser.parse_args()
 
 

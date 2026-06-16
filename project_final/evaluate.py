@@ -28,6 +28,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from env.parking_env import ParkingEnv
 from agents.dqn import DQNAgent
+from agents.double_dqn import DoubleDQNAgent
+from agents.reinforce import REINFORCEAgent
 from agents.a2c import A2CAgent
 from agents.ppo import PPOAgent
 
@@ -38,6 +40,9 @@ from agents.ppo import PPOAgent
 
 def evaluate_agent(env, agent, algo: str, n_episodes: int = 100):
     rewards, lengths, successes = [], [], []
+    collisions = []
+    time_overs = []
+    parking_times = []
 
     for ep in range(n_episodes):
         obs, _ = env.reset(seed=ep)
@@ -45,7 +50,7 @@ def evaluate_agent(env, agent, algo: str, n_episodes: int = 100):
         done = False
 
         while not done:
-            if algo == "dqn":
+            if algo in ["dqn", "double_dqn"]:
                 action = agent.select_action(obs, training=False)
                 log_prob, value = None, None
             else:
@@ -57,17 +62,28 @@ def evaluate_agent(env, agent, algo: str, n_episodes: int = 100):
             ep_length += 1
 
         success = env.is_success(obs, info)
+        crashed = bool(info.get("crashed", False))
+        time_over = bool(truncated and not success and not crashed)
         rewards.append(ep_reward)
         lengths.append(ep_length)
         successes.append(float(success))
+        collisions.append(float(crashed))
+        time_overs.append(float(time_over))
+        if success:
+            parking_times.append(ep_length)
 
     return {
         "mean_reward":  np.mean(rewards),
         "std_reward":   np.std(rewards),
         "mean_length":  np.mean(lengths),
         "success_rate": np.mean(successes),
+        "collision_rate": np.mean(collisions),
+        "time_over_rate": np.mean(time_overs),
+        "avg_parking_time": np.mean(parking_times) if parking_times else None,
         "rewards":      rewards,
         "successes":    successes,
+        "collisions":   collisions,
+        "time_overs":   time_overs,
     }
 
 
@@ -75,8 +91,21 @@ def evaluate_agent(env, agent, algo: str, n_episodes: int = 100):
 # Plotting helpers
 # ------------------------------------------------------------------
 
-COLORS = {"dqn": "#E63946", "a2c": "#457B9D", "ppo": "#2A9D8F"}
-LABELS = {"dqn": "DQN (Baseline 1)", "a2c": "A2C (Baseline 2)", "ppo": "PPO (Ours)"}
+ALGO_ORDER = ["dqn", "double_dqn", "reinforce", "a2c", "ppo"]
+COLORS = {
+    "dqn": "#E63946",
+    "double_dqn": "#9B5DE5",
+    "reinforce": "#F4A261",
+    "a2c": "#457B9D",
+    "ppo": "#2A9D8F",
+}
+LABELS = {
+    "dqn": "DQN (Baseline 1)",
+    "double_dqn": "Double DQN",
+    "reinforce": "REINFORCE (PG)",
+    "a2c": "A2C (Baseline 2)",
+    "ppo": "PPO (Ours)",
+}
 
 
 def smooth(values, window: int = 20):
@@ -88,11 +117,11 @@ def smooth(values, window: int = 20):
 
 
 def plot_training_curves(log_dir: str, save_dir: str):
-    """Plot episode reward and success rate for all available algorithms."""
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    """Plot reward/success/collision curves for all available algorithms."""
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
     fig.suptitle("Training Curves — Autonomous Parking", fontsize=14, fontweight="bold")
 
-    for algo in ["dqn", "a2c", "ppo"]:
+    for algo in ALGO_ORDER:
         log_path = os.path.join(log_dir, f"{algo}_log.json")
         if not os.path.exists(log_path):
             continue
@@ -103,6 +132,7 @@ def plot_training_curves(log_dir: str, save_dir: str):
         steps   = np.array(data["steps"])
         rewards = np.array(data["episode_rewards"])
         sr      = np.array(data["success_rate"])
+        cr      = np.array(data.get("collision_rate", np.zeros_like(sr)))
 
         color = COLORS[algo]
         label = LABELS[algo]
@@ -121,6 +151,10 @@ def plot_training_curves(log_dir: str, save_dir: str):
         smoothed_sr = smooth(sr)
         axes[1].plot(steps[:len(smoothed_sr)], smoothed_sr * 100, color=color, label=label, linewidth=2)
 
+        # Collision rate
+        smoothed_cr = smooth(cr)
+        axes[2].plot(steps[:len(smoothed_cr)], smoothed_cr * 100, color=color, label=label, linewidth=2)
+
     axes[0].set_xlabel("Environment Steps")
     axes[0].set_ylabel("Episode Reward")
     axes[0].set_title("Episode Reward")
@@ -133,6 +167,13 @@ def plot_training_curves(log_dir: str, save_dir: str):
     axes[1].set_ylim(0, 100)
     axes[1].legend()
     axes[1].grid(alpha=0.3)
+
+    axes[2].set_xlabel("Environment Steps")
+    axes[2].set_ylabel("Collision Rate (%)")
+    axes[2].set_title("Collision Rate (100-ep rolling avg)")
+    axes[2].set_ylim(0, 100)
+    axes[2].legend()
+    axes[2].grid(alpha=0.3)
 
     plt.tight_layout()
     out_path = os.path.join(save_dir, "training_curves.png")
@@ -150,8 +191,10 @@ def plot_comparison_bar(results: dict, save_dir: str):
     mean_r = [results[a]["mean_reward"]  for a in algos]
     std_r  = [results[a]["std_reward"]   for a in algos]
     sr     = [results[a]["success_rate"] * 100 for a in algos]
+    cr     = [results[a]["collision_rate"] * 100 for a in algos]
+    tor    = [results[a]["time_over_rate"] * 100 for a in algos]
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig, axes = plt.subplots(1, 4, figsize=(20, 5))
     fig.suptitle("Final Performance Comparison (100 eval episodes)",
                  fontsize=13, fontweight="bold")
 
@@ -175,6 +218,30 @@ def plot_comparison_bar(results: dict, save_dir: str):
     axes[1].grid(axis="y", alpha=0.3)
     for bar, val in zip(bars2, sr):
         axes[1].text(bar.get_x() + bar.get_width() / 2,
+                     bar.get_height() + 0.5,
+                     f"{val:.1f}%", ha="center", va="bottom", fontsize=10)
+
+    # Collision rate
+    bars3 = axes[2].bar(labels, cr, color=colors,
+                        edgecolor="black", linewidth=0.8)
+    axes[2].set_ylabel("Collision Rate (%)")
+    axes[2].set_title("Collision Rate")
+    axes[2].set_ylim(0, 100)
+    axes[2].grid(axis="y", alpha=0.3)
+    for bar, val in zip(bars3, cr):
+        axes[2].text(bar.get_x() + bar.get_width() / 2,
+                     bar.get_height() + 0.5,
+                     f"{val:.1f}%", ha="center", va="bottom", fontsize=10)
+
+    # Time-over rate
+    bars4 = axes[3].bar(labels, tor, color=colors,
+                        edgecolor="black", linewidth=0.8)
+    axes[3].set_ylabel("Time-over Rate (%)")
+    axes[3].set_title("Time-over Rate")
+    axes[3].set_ylim(0, 100)
+    axes[3].grid(axis="y", alpha=0.3)
+    for bar, val in zip(bars4, tor):
+        axes[3].text(bar.get_x() + bar.get_width() / 2,
                      bar.get_height() + 0.5,
                      f"{val:.1f}%", ha="center", va="bottom", fontsize=10)
 
@@ -218,7 +285,7 @@ def plot_reward_distribution(results: dict, save_dir: str):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--algo",       type=str, default=None,
-                        choices=["dqn", "a2c", "ppo"])
+                        choices=ALGO_ORDER)
     parser.add_argument("--ckpt",       type=str, default=None,
                         help="Path to checkpoint file for single-algo eval")
     parser.add_argument("--compare",    action="store_true",
@@ -226,13 +293,17 @@ def parse_args():
     parser.add_argument("--log_dir",    type=str, default="logs")
     parser.add_argument("--n_episodes", type=int, default=100)
     parser.add_argument("--noise_std",  type=float, default=0.02)
-    parser.add_argument("--device",     type=str, default="cpu")
+    parser.add_argument("--device",     type=str, default="cuda")
     return parser.parse_args()
 
 
 def load_agent(algo: str, ckpt_path: str, obs_dim: int, env, device: str):
     if algo == "dqn":
         agent = DQNAgent(obs_dim=obs_dim, n_actions=env.N_DISCRETE_ACTIONS, device=device)
+    elif algo == "double_dqn":
+        agent = DoubleDQNAgent(obs_dim=obs_dim, n_actions=env.N_DISCRETE_ACTIONS, device=device)
+    elif algo == "reinforce":
+        agent = REINFORCEAgent(obs_dim=obs_dim, action_dim=env.action_space.shape[0], device=device)
     elif algo == "a2c":
         agent = A2CAgent(obs_dim=obs_dim, action_dim=env.action_space.shape[0], device=device)
     elif algo == "ppo":
@@ -247,7 +318,7 @@ def main():
 
     # ---- Single algorithm evaluation ----
     if args.algo and args.ckpt:
-        discrete = (args.algo == "dqn")
+        discrete = (args.algo in ["dqn", "double_dqn"])
         env = ParkingEnv(discrete=discrete, noise_std=args.noise_std, render_mode="human")
         obs_dim = env.observation_space.shape[0]
 
@@ -258,7 +329,13 @@ def main():
         print(f"\n{'='*40}")
         print(f"  Mean Reward  : {result['mean_reward']:.2f} ± {result['std_reward']:.2f}")
         print(f"  Success Rate : {result['success_rate']:.2%}")
+        print(f"  Collision Rate: {result['collision_rate']:.2%}")
+        print(f"  Time-over Rate: {result['time_over_rate']:.2%}")
         print(f"  Mean Length  : {result['mean_length']:.1f} steps")
+        if result["avg_parking_time"] is None:
+            print(f"  Avg Parking Time (success only): N/A")
+        else:
+            print(f"  Avg Parking Time (success only): {result['avg_parking_time']:.1f} steps")
         print(f"{'='*40}")
         env.close()
 
@@ -267,13 +344,13 @@ def main():
         results = {}
         ckpt_dir = os.path.join(args.log_dir, "checkpoints")
 
-        for algo in ["dqn", "a2c", "ppo"]:
+        for algo in ALGO_ORDER:
             ckpt_path = os.path.join(ckpt_dir, f"{algo}_final.pt")
             if not os.path.exists(ckpt_path):
                 print(f"[SKIP] {algo}: checkpoint not found at {ckpt_path}")
                 continue
 
-            discrete = (algo == "dqn")
+            discrete = (algo in ["dqn", "double_dqn"])
             env = ParkingEnv(discrete=discrete, noise_std=args.noise_std)
             obs_dim = env.observation_space.shape[0]
 
@@ -283,7 +360,9 @@ def main():
             env.close()
 
             print(f"  -> reward={results[algo]['mean_reward']:.2f}  "
-                  f"success={results[algo]['success_rate']:.2%}")
+                  f"success={results[algo]['success_rate']:.2%}  "
+                  f"collision={results[algo]['collision_rate']:.2%}  "
+                  f"time_over={results[algo]['time_over_rate']:.2%}")
 
         if results:
             print("\nGenerating plots...")

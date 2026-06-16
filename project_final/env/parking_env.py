@@ -16,10 +16,11 @@ class ParkingEnv(gym.Env):
     """
     Wrapper around highway-env parking-v0 with custom MDP design.
 
-    Observation (12-dim, continuous):
+    Observation (13-dim, continuous):
         [x, y, vx, vy, cos_h, sin_h,          # agent kinematics (6)
          goal_x, goal_y, goal_cos_h, goal_sin_h,  # goal info (4)
-         dx, dy]                                # relative displacement to goal (2)
+         dx, dy,                                # relative displacement to goal (2)
+         nearest_obstacle_dist]                 # nearest obstacle distance (1)
 
     Action:
         - DQN mode  : discrete index mapped to (steering, throttle) pairs
@@ -27,6 +28,7 @@ class ParkingEnv(gym.Env):
 
     Reward:
         - Distance reward  : -distance_to_goal        (dense)
+        - Progress reward  : +(prev_dist - dist)      (dense)
         - Heading reward   : -heading_error            (dense)
         - Collision penalty: -50                       (sparse)
         - Time penalty     : -0.1 per step             (dense)
@@ -54,6 +56,7 @@ class ParkingEnv(gym.Env):
         noise_std: float = 0.02,
         max_steps: int = 200,
         n_other_vehicles: int = 6,
+        obstacle_dist_scale: float = 10.0,
         render_mode: str = None,
     ):
         super().__init__()
@@ -62,6 +65,7 @@ class ParkingEnv(gym.Env):
         self.noise_std      = noise_std
         self.max_steps      = max_steps
         self.n_other_vehicles = n_other_vehicles
+        self.obstacle_dist_scale = obstacle_dist_scale
 
         # Build base env
         self._base_env = gym.make(
@@ -74,10 +78,10 @@ class ParkingEnv(gym.Env):
             },
         )
 
-        # Observation space: 12-dim flat vector, all in roughly [-1, 1]
+        # Observation space: 13-dim flat vector, all in roughly [-1, 1]
         self.observation_space = gym.spaces.Box(
-            low=-np.ones(12, dtype=np.float32),
-            high=np.ones(12, dtype=np.float32),
+            low=-np.ones(13, dtype=np.float32),
+            high=np.ones(13, dtype=np.float32),
         )
 
         # Action space
@@ -99,8 +103,8 @@ class ParkingEnv(gym.Env):
         super().reset(seed=seed)
         raw_obs, info = self._base_env.reset(seed=seed, options=options)
         self._step_count = 0
-        self._prev_dist  = None
         obs = self._process_obs(raw_obs)
+        self._prev_dist = float(np.sqrt(float(obs[10])**2 + float(obs[11])**2))
         return obs, info
 
     def step(self, action):
@@ -143,7 +147,11 @@ class ParkingEnv(gym.Env):
         Flatten dict observation and add sensor noise.
 
         raw_obs keys: 'observation' (6,), 'achieved_goal' (6,), 'desired_goal' (6,)
-        We use: agent kinematics (6) + goal (4) + relative displacement (2)
+        We use:
+            - agent kinematics (6)
+            - goal info (4)
+            - relative displacement (2)
+            - nearest obstacle distance (1)
         """
         agent = raw_obs["observation"].astype(np.float32)   # x,y,vx,vy,cos_h,sin_h
         goal  = raw_obs["desired_goal"].astype(np.float32)  # x,y,vx,vy,cos_h,sin_h
@@ -151,12 +159,14 @@ class ParkingEnv(gym.Env):
         # Relative position to goal
         dx = goal[0] - agent[0]
         dy = goal[1] - agent[1]
+        nearest_obs_dist = self._nearest_obstacle_distance()
 
         obs = np.concatenate([
             agent,                    # (6,)
             goal[[0, 1, 4, 5]],       # goal x, y, cos_h, sin_h  (4,)
             np.array([dx, dy]),       # relative displacement     (2,)
-        ]).astype(np.float32)         # total: 12
+            np.array([nearest_obs_dist], dtype=np.float32),  # nearest obstacle dist (1,)
+        ]).astype(np.float32)         # total: 13
 
         # Sensor noise (stochasticity)
         if self.noise_std > 0:
@@ -164,11 +174,54 @@ class ParkingEnv(gym.Env):
 
         return np.clip(obs, -1.0, 1.0)
 
+    def _nearest_obstacle_distance(self) -> float:
+        """
+        Return nearest euclidean distance from ego to other vehicles.
+        Distance is normalized to [0, 1] using obstacle_dist_scale.
+        """
+        try:
+            env_unwrapped = self._base_env.unwrapped
+            if not hasattr(env_unwrapped, "road") or env_unwrapped.road is None:
+                return 1.0
+
+            all_vehicles = getattr(env_unwrapped.road, "vehicles", [])
+            if not all_vehicles:
+                return 1.0
+
+            ego = None
+            if hasattr(env_unwrapped, "controlled_vehicles") and env_unwrapped.controlled_vehicles:
+                ego = env_unwrapped.controlled_vehicles[0]
+            elif hasattr(env_unwrapped, "vehicle"):
+                ego = env_unwrapped.vehicle
+            if ego is None or not hasattr(ego, "position"):
+                return 1.0
+
+            ego_pos = np.asarray(ego.position, dtype=np.float32)
+            dists = []
+            for veh in all_vehicles:
+                if ego is not None and veh is ego:
+                    continue
+                if not hasattr(veh, "position"):
+                    continue
+                veh_pos = np.asarray(veh.position, dtype=np.float32)
+                dists.append(float(np.linalg.norm(ego_pos - veh_pos)))
+
+            if not dists:
+                return 1.0
+
+            min_dist = min(dists)
+            # Prevent saturation by scaling world distance into [0, 1].
+            norm_dist = min_dist / max(self.obstacle_dist_scale, 1e-6)
+            return float(np.clip(norm_dist, 0.0, 1.0))
+        except Exception:
+            # Keep environment robust even if highway-env internals differ.
+            return 1.0
+
     def _compute_reward(self, obs: np.ndarray, info: dict, terminated: bool) -> float:
         """
         Custom reward function.
 
-        obs layout: [x,y,vx,vy,cos_h,sin_h, gx,gy,gcos,gsin, dx,dy]
+        obs layout: [x,y,vx,vy,cos_h,sin_h, gx,gy,gcos,gsin, dx,dy, d_obs]
         """
         dx, dy   = float(obs[10]), float(obs[11])
         distance = np.sqrt(dx**2 + dy**2)
@@ -181,7 +234,13 @@ class ParkingEnv(gym.Env):
         speed = np.sqrt(float(obs[2])**2 + float(obs[3])**2)
 
         # Dense rewards
-        reward  = -distance                    # approach goal
+        progress = 0.0
+        if self._prev_dist is not None:
+            progress = self._prev_dist - distance
+        self._prev_dist = distance
+
+        reward  = -distance                    # stay close to goal
+        reward += 2.0 * progress               # encourage moving toward goal
         reward -= 0.3 * heading_error          # align heading
         reward -= 0.1                          # time penalty
 
