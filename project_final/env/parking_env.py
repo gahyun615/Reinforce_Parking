@@ -2,7 +2,7 @@
 Custom Parking Environment
 - Base: highway-env parking-v0
 - Customizations:
-    1. Observation flattened to vector + sensor noise
+    1. Observation flattened to vector (optional sensor noise)
     2. Redesigned reward function
     3. Random vehicle placement per episode
 """
@@ -32,7 +32,7 @@ class ParkingEnv(gym.Env):
         - Progress reward  : +(prev_dist - dist)      (dense)
         - Heading reward   : -heading_error            (dense)
         - Collision penalty: -50                       (sparse)
-        - Time penalty     : -0.1 per step             (dense)
+        - Time penalty     : -0.05 per step             (dense)
         - Success bonus    : +100                      (sparse)
     """
 
@@ -54,7 +54,7 @@ class ParkingEnv(gym.Env):
     def __init__(
         self,
         discrete: bool = False,
-        noise_std: float = 0.02,
+        noise_std: float = 0.0,
         max_steps: int = 200,
         n_other_vehicles: int = 6,
         obstacle_dist_scale: float = 10.0,
@@ -268,7 +268,7 @@ class ParkingEnv(gym.Env):
         reward  = -distance                    # stay close to goal
         reward += 2.0 * progress               # encourage moving toward goal
         reward -= 0.3 * heading_error          # align heading
-        reward -= 0.1                          # time penalty
+        reward -= 0.05                         # time penalty
 
         # Sparse penalties / bonuses
         if info.get("crashed", False):

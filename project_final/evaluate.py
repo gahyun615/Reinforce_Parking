@@ -296,7 +296,7 @@ def parse_args():
                         help="Compare all algorithms from logs")
     parser.add_argument("--log_dir",    type=str, default="logs")
     parser.add_argument("--n_episodes", type=int, default=100)
-    parser.add_argument("--noise_std",  type=float, default=0.02)
+    parser.add_argument("--noise_std",  type=float, default=0.0)
     parser.add_argument("--device",     type=str, default="cuda")
     return parser.parse_args()
 
