@@ -32,24 +32,42 @@ class ParkingEnv(gym.Env):
         - Progress reward  : +(prev_dist - dist)      (dense)
         - Heading reward   : -heading_error            (dense)
         - Collision penalty: -50                       (sparse)
-        - Time penalty     : -0.05 per step             (dense)
+        - Time penalty     : -0.1 per step             (dense)
         - Success bonus    : +100                      (sparse)
     """
 
     # Discrete action set for DQN baseline
     DISCRETE_ACTIONS = [
-        (-1.0,  0.6), (-0.5,  0.6), (0.0,  0.6), (0.5,  0.6), (1.0,  0.6),
-        (-1.0,  0.3), (-0.5,  0.3), (0.0,  0.3), (0.5,  0.3), (1.0,  0.3),
-        (-1.0,  0.0), (              0.0,  0.0),               (1.0,  0.0),
-        (-1.0, -0.3), (-0.5, -0.3), (0.0, -0.3), (0.5, -0.3), (1.0, -0.3),
-        (-1.0, -0.6), (-0.5, -0.6), (0.0, -0.6), (0.5, -0.6), (1.0, -0.6),
+        (-1.0, 0.6),
+        (-0.5, 0.6),
+        (0.0, 0.6),
+        (0.5, 0.6),
+        (1.0, 0.6),
+        (-1.0, 0.3),
+        (-0.5, 0.3),
+        (0.0, 0.3),
+        (0.5, 0.3),
+        (1.0, 0.3),
+        (-1.0, 0.0),
+        (0.0, 0.0),
+        (1.0, 0.0),
+        (-1.0, -0.3),
+        (-0.5, -0.3),
+        (0.0, -0.3),
+        (0.5, -0.3),
+        (1.0, -0.3),
+        (-1.0, -0.6),
+        (-0.5, -0.6),
+        (0.0, -0.6),
+        (0.5, -0.6),
+        (1.0, -0.6),
     ]
     N_DISCRETE_ACTIONS = len(DISCRETE_ACTIONS)
 
     # Success thresholds
-    SUCCESS_DIST    = 0.02   # metres  (normalised space)
-    SUCCESS_HEADING = 0.08   # radians (~8.6 deg) in cos/sin error
-    SUCCESS_SPEED   = 0.05   # normalised speed
+    SUCCESS_DIST = 0.02  # metres  (normalised space)
+    SUCCESS_HEADING = 0.08  # radians (~8.6 deg) in cos/sin error
+    SUCCESS_SPEED = 0.05  # normalised speed
 
     def __init__(
         self,
@@ -62,9 +80,9 @@ class ParkingEnv(gym.Env):
     ):
         super().__init__()
 
-        self.discrete       = discrete
-        self.noise_std      = noise_std
-        self.max_steps      = max_steps
+        self.discrete = discrete
+        self.noise_std = noise_std
+        self.max_steps = max_steps
         self.n_other_vehicles = n_other_vehicles
         self.obstacle_dist_scale = obstacle_dist_scale
 
@@ -75,7 +93,7 @@ class ParkingEnv(gym.Env):
             config={
                 "vehicles_count": n_other_vehicles,
                 "duration": max_steps,
-                "collision_reward": 0,   # we handle collision reward ourselves
+                "collision_reward": 0,  # we handle collision reward ourselves
             },
         )
 
@@ -91,7 +109,7 @@ class ParkingEnv(gym.Env):
         else:
             self.action_space = gym.spaces.Box(
                 low=np.array([-1.0, -1.0], dtype=np.float32),
-                high=np.array([ 1.0,  1.0], dtype=np.float32),
+                high=np.array([1.0, 1.0], dtype=np.float32),
             )
 
         self._step_count = 0
@@ -105,7 +123,7 @@ class ParkingEnv(gym.Env):
         raw_obs, info = self._base_env.reset(seed=seed, options=options)
         self._step_count = 0
         obs = self._process_obs(raw_obs)
-        self._prev_dist = float(np.sqrt(float(obs[10])**2 + float(obs[11])**2))
+        self._prev_dist = float(np.sqrt(float(obs[10]) ** 2 + float(obs[11]) ** 2))
         return obs, info
 
     def step(self, action):
@@ -123,7 +141,7 @@ class ParkingEnv(gym.Env):
         raw_obs, _, terminated, truncated, info = self._base_env.step(cont_action)
         self._step_count += 1
 
-        obs    = self._process_obs(raw_obs)
+        obs = self._process_obs(raw_obs)
         reward = self._compute_reward(obs, info, terminated)
 
         # Terminate on collision or max steps
@@ -159,25 +177,35 @@ class ParkingEnv(gym.Env):
             - nearest obstacle distance (1)
             - bearing to nearest obstacle in ego frame (2: cos, sin)
         """
-        agent = raw_obs["observation"].astype(np.float32)   # x,y,vx,vy,cos_h,sin_h
-        goal  = raw_obs["desired_goal"].astype(np.float32)  # x,y,vx,vy,cos_h,sin_h
+        agent = raw_obs["observation"].astype(np.float32)  # x,y,vx,vy,cos_h,sin_h
+        goal = raw_obs["desired_goal"].astype(np.float32)  # x,y,vx,vy,cos_h,sin_h
 
         # Relative position to goal
         dx = goal[0] - agent[0]
         dy = goal[1] - agent[1]
         nearest_obs_dist, obs_rel_cos, obs_rel_sin = self._nearest_obstacle_info()
 
-        obs = np.concatenate([
-            agent,                    # (6,)
-            goal[[0, 1, 4, 5]],       # goal x, y, cos_h, sin_h  (4,)
-            np.array([dx, dy]),       # relative displacement     (2,)
-            np.array([nearest_obs_dist], dtype=np.float32),  # nearest obstacle dist (1,)
-            np.array([obs_rel_cos, obs_rel_sin], dtype=np.float32),  # bearing to nearest obs (2,)
-        ]).astype(np.float32)         # total: 15
+        obs = np.concatenate(
+            [
+                agent,  # (6,)
+                goal[[0, 1, 4, 5]],  # goal x, y, cos_h, sin_h  (4,)
+                np.array([dx, dy]),  # relative displacement     (2,)
+                np.array(
+                    [nearest_obs_dist], dtype=np.float32
+                ),  # nearest obstacle dist (1,)
+                np.array(
+                    [obs_rel_cos, obs_rel_sin], dtype=np.float32
+                ),  # bearing to nearest obs (2,)
+            ]
+        ).astype(
+            np.float32
+        )  # total: 15
 
         # Sensor noise (stochasticity)
         if self.noise_std > 0:
-            obs += np.random.normal(0, self.noise_std, size=obs.shape).astype(np.float32)
+            obs += np.random.normal(0, self.noise_std, size=obs.shape).astype(
+                np.float32
+            )
 
         return np.clip(obs, -1.0, 1.0)
 
@@ -198,7 +226,10 @@ class ParkingEnv(gym.Env):
                 return 1.0, 1.0, 0.0
 
             ego = None
-            if hasattr(env_unwrapped, "controlled_vehicles") and env_unwrapped.controlled_vehicles:
+            if (
+                hasattr(env_unwrapped, "controlled_vehicles")
+                and env_unwrapped.controlled_vehicles
+            ):
                 ego = env_unwrapped.controlled_vehicles[0]
             elif hasattr(env_unwrapped, "vehicle"):
                 ego = env_unwrapped.vehicle
@@ -249,15 +280,15 @@ class ParkingEnv(gym.Env):
 
         obs layout: [x,y,vx,vy,cos_h,sin_h, gx,gy,gcos,gsin, dx,dy, d_obs, obs_rel_cos,obs_rel_sin]
         """
-        dx, dy   = float(obs[10]), float(obs[11])
+        dx, dy = float(obs[10]), float(obs[11])
         distance = np.sqrt(dx**2 + dy**2)
 
         # Agent heading vs goal heading (cosine similarity -> error in [0,2])
-        cos_h, sin_h   = float(obs[4]), float(obs[5])
-        gcos_h, gsin_h = float(obs[6+2]), float(obs[6+3])
-        heading_error  = 1.0 - (cos_h * gcos_h + sin_h * gsin_h)  # in [0, 2]
+        cos_h, sin_h = float(obs[4]), float(obs[5])
+        gcos_h, gsin_h = float(obs[6 + 2]), float(obs[6 + 3])
+        heading_error = 1.0 - (cos_h * gcos_h + sin_h * gsin_h)  # in [0, 2]
 
-        speed = np.sqrt(float(obs[2])**2 + float(obs[3])**2)
+        speed = np.sqrt(float(obs[2]) ** 2 + float(obs[3]) ** 2)
 
         # Dense rewards
         progress = 0.0
@@ -265,19 +296,21 @@ class ParkingEnv(gym.Env):
             progress = self._prev_dist - distance
         self._prev_dist = distance
 
-        reward  = -distance                    # stay close to goal
-        reward += 2.0 * progress               # encourage moving toward goal
-        reward -= 0.3 * heading_error          # align heading
-        reward -= 0.05                         # time penalty
+        reward = -distance  # stay close to goal
+        reward += 2.0 * progress  # encourage moving toward goal
+        reward -= 0.3 * heading_error  # align heading
+        reward -= 0.1  # time penalty
 
         # Sparse penalties / bonuses
         if info.get("crashed", False):
             reward -= 50.0
 
         # Success bonus
-        if (distance < self.SUCCESS_DIST
-                and heading_error < self.SUCCESS_HEADING
-                and speed < self.SUCCESS_SPEED):
+        if (
+            distance < self.SUCCESS_DIST
+            and heading_error < self.SUCCESS_HEADING
+            and speed < self.SUCCESS_SPEED
+        ):
             reward += 100.0
 
         return float(reward)
@@ -285,10 +318,12 @@ class ParkingEnv(gym.Env):
     def is_success(self, obs: np.ndarray, info: dict) -> bool:
         dx, dy = float(obs[10]), float(obs[11])
         distance = np.sqrt(dx**2 + dy**2)
-        cos_h, sin_h   = float(obs[4]),    float(obs[5])
-        gcos_h, gsin_h = float(obs[6+2]),  float(obs[6+3])
-        heading_error  = 1.0 - (cos_h * gcos_h + sin_h * gsin_h)
-        speed = np.sqrt(float(obs[2])**2 + float(obs[3])**2)
-        return (distance < self.SUCCESS_DIST
-                and heading_error < self.SUCCESS_HEADING
-                and speed < self.SUCCESS_SPEED)
+        cos_h, sin_h = float(obs[4]), float(obs[5])
+        gcos_h, gsin_h = float(obs[6 + 2]), float(obs[6 + 3])
+        heading_error = 1.0 - (cos_h * gcos_h + sin_h * gsin_h)
+        speed = np.sqrt(float(obs[2]) ** 2 + float(obs[3]) ** 2)
+        return (
+            distance < self.SUCCESS_DIST
+            and heading_error < self.SUCCESS_HEADING
+            and speed < self.SUCCESS_SPEED
+        )
