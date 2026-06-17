@@ -101,11 +101,11 @@ COLORS = {
     "ppo": "#2A9D8F",
 }
 LABELS = {
-    "dqn": "DQN (Baseline 1)",
+    "dqn": "DQN",
     "double_dqn": "Double DQN",
-    "reinforce": "REINFORCE (PG)",
-    "a2c": "A2C (Baseline 2)",
-    "ppo": "PPO (Ours)",
+    "reinforce": "REINFORCE",
+    "a2c": "A2C",
+    "ppo": "PPO",
 }
 
 

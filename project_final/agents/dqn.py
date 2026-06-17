@@ -1,5 +1,5 @@
 """
-DQN Agent (Baseline 1 - Value-based RL)
+DQN Agent (Value-based RL)
 - Discretized action space for continuous parking problem
 - Experience replay + target network
 - Epsilon-greedy exploration

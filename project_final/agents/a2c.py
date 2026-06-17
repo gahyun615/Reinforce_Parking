@@ -1,5 +1,5 @@
 """
-A2C Agent (Baseline 2 - Policy Gradient / Actor-Critic)
+A2C Agent (Actor-Critic)
 - Continuous action space (steering, throttle)
 - Synchronous Advantage Actor-Critic
 - Gaussian policy with learnable std

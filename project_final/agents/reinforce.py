@@ -1,5 +1,5 @@
 """
-REINFORCE Agent (Policy Gradient baseline)
+REINFORCE Agent (Policy Gradient)
 - Continuous action space (steering, throttle)
 - Monte-Carlo policy gradient with return normalization
 """

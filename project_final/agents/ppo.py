@@ -1,5 +1,5 @@
 """
-PPO Agent (Our Solution - Advanced Actor-Critic)
+PPO Agent (Actor-Critic)
 - Continuous action space (steering, throttle)
 - Clipped surrogate objective to prevent destructive updates
 - Multiple epochs of minibatch updates per rollout
