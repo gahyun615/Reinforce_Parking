@@ -31,6 +31,13 @@ from agents.ppo import PPOAgent
 from agents.sac import SACAgent
 
 
+def to_continuous_action(action) -> np.ndarray:
+    """Normalize agent output to a 1-D continuous action vector."""
+    if isinstance(action, tuple):
+        action = action[0]
+    return np.asarray(action, dtype=np.float32).reshape(-1)
+
+
 # ------------------------------------------------------------------
 # Logging helper
 # ------------------------------------------------------------------
@@ -88,7 +95,7 @@ class TrainingLogger:
 # Training loops (one per algorithm family)
 # ------------------------------------------------------------------
 
-def train_dqn(env, agent, total_steps, log_dir, algo, save_every):
+def train_dqn(env, agent, total_steps, log_dir, algo, save_every, continuous=False):
     logger = TrainingLogger(log_dir, algo)
     ckpt_dir = os.path.join(log_dir, "checkpoints")
     os.makedirs(ckpt_dir, exist_ok=True)
@@ -98,7 +105,8 @@ def train_dqn(env, agent, total_steps, log_dir, algo, save_every):
     episode = 0
 
     for step in range(1, total_steps + 1):
-        action = agent.select_action(obs, training=True)
+        raw_action = agent.select_action(obs, training=True)
+        action = to_continuous_action(raw_action) if continuous else raw_action
         next_obs, reward, terminated, truncated, info = env.step(action)
         done = terminated or truncated
 
@@ -266,7 +274,10 @@ def main():
             action_dim=env.action_space.shape[0],
             device=args.device,
         )
-        train_dqn(env, agent, args.total_steps, args.log_dir, args.algo, args.save_every)
+        train_dqn(
+            env, agent, args.total_steps, args.log_dir, args.algo, args.save_every,
+            continuous=True,
+        )
 
     env.close()
 

@@ -114,7 +114,11 @@ class ParkingEnv(gym.Env):
             steering, throttle = self.DISCRETE_ACTIONS[int(action)]
             cont_action = np.array([steering, throttle], dtype=np.float32)
         else:
-            cont_action = np.clip(action, -1.0, 1.0).astype(np.float32)
+            if isinstance(action, tuple):
+                action = action[0]
+            cont_action = np.clip(
+                np.asarray(action, dtype=np.float32).reshape(-1), -1.0, 1.0
+            ).astype(np.float32)
 
         raw_obs, _, terminated, truncated, info = self._base_env.step(cont_action)
         self._step_count += 1
