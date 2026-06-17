@@ -22,6 +22,7 @@ from agents.double_dqn import DoubleDQNAgent
 from agents.reinforce import REINFORCEAgent
 from agents.a2c import A2CAgent
 from agents.ppo import PPOAgent
+from agents.sac import SACAgent
 from agents.checkpoint_utils import CheckpointMismatchError
 
 
@@ -54,6 +55,8 @@ def load_agent(algo, ckpt_path, obs_dim, env, device):
         agent = A2CAgent(obs_dim=obs_dim, action_dim=env.action_space.shape[0], device=device)
     elif algo == "ppo":
         agent = PPOAgent(obs_dim=obs_dim, action_dim=env.action_space.shape[0], device=device)
+    elif algo == "sac":
+        agent = SACAgent(obs_dim=obs_dim, action_dim=env.action_space.shape[0], device=device)
     agent.load(ckpt_path)
     return agent
 
@@ -110,7 +113,7 @@ def record_episodes(algo, ckpt_path, n_episodes, output_dir, device, noise_std, 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--algo",       type=str, required=True,
-                        choices=["dqn", "double_dqn", "reinforce", "a2c", "ppo"])
+                        choices=["dqn", "double_dqn", "reinforce", "a2c", "ppo", "sac"])
     parser.add_argument("--ckpt",       type=str, required=True)
     parser.add_argument("--n_episodes", type=int, default=5)
     parser.add_argument("--output_dir", type=str, default="videos")

@@ -19,7 +19,7 @@ import importlib.util
 import torch
 
 
-ALGORITHMS = ["dqn", "double_dqn", "reinforce", "a2c", "ppo"]
+ALGORITHMS = ["dqn", "double_dqn", "reinforce", "a2c", "ppo", "sac"]
 
 
 def resolve_device(requested: str) -> str:

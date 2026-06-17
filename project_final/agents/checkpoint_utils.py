@@ -12,6 +12,7 @@ def infer_obs_dim(ckpt: dict) -> int | None:
     candidates = [
         ("q_net", "net.0.weight"),
         ("actor", "net.0.weight"),
+        ("actor", "backbone.0.weight"),
         ("policy", "backbone.0.weight"),
         ("ac", "backbone.0.weight"),
     ]

@@ -32,6 +32,7 @@ from agents.double_dqn import DoubleDQNAgent
 from agents.reinforce import REINFORCEAgent
 from agents.a2c import A2CAgent
 from agents.ppo import PPOAgent
+from agents.sac import SACAgent
 from agents.checkpoint_utils import CheckpointMismatchError
 
 
@@ -92,13 +93,14 @@ def evaluate_agent(env, agent, algo: str, n_episodes: int = 100):
 # Plotting helpers
 # ------------------------------------------------------------------
 
-ALGO_ORDER = ["dqn", "double_dqn", "reinforce", "a2c", "ppo"]
+ALGO_ORDER = ["dqn", "double_dqn", "reinforce", "a2c", "ppo", "sac"]
 COLORS = {
     "dqn": "#E63946",
     "double_dqn": "#9B5DE5",
     "reinforce": "#F4A261",
     "a2c": "#457B9D",
     "ppo": "#2A9D8F",
+    "sac": "#6A994E",
 }
 LABELS = {
     "dqn": "DQN",
@@ -106,6 +108,7 @@ LABELS = {
     "reinforce": "REINFORCE",
     "a2c": "A2C",
     "ppo": "PPO",
+    "sac": "SAC",
 }
 
 
@@ -309,6 +312,8 @@ def load_agent(algo: str, ckpt_path: str, obs_dim: int, env, device: str):
         agent = A2CAgent(obs_dim=obs_dim, action_dim=env.action_space.shape[0], device=device)
     elif algo == "ppo":
         agent = PPOAgent(obs_dim=obs_dim, action_dim=env.action_space.shape[0], device=device)
+    elif algo == "sac":
+        agent = SACAgent(obs_dim=obs_dim, action_dim=env.action_space.shape[0], device=device)
     agent.load(ckpt_path)
     return agent
 
