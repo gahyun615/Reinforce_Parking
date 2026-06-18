@@ -118,7 +118,7 @@ def parse_args():
     parser.add_argument("--n_episodes", type=int, default=5)
     parser.add_argument("--output_dir", type=str, default="videos")
     parser.add_argument("--fps",        type=int, default=30)
-    parser.add_argument("--noise_std",  type=float, default=0.0)
+    parser.add_argument("--noise_std",  type=float, default=0.02)
     parser.add_argument("--device",     type=str, default="cuda")
     return parser.parse_args()
 

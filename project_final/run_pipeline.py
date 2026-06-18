@@ -61,7 +61,7 @@ def print_video_backend_status():
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--total_steps", type=int, default=300_000)
-    parser.add_argument("--noise_std", type=float, default=0.0)
+    parser.add_argument("--noise_std", type=float, default=0.02)
     parser.add_argument("--n_vehicles", type=int, default=6)
     parser.add_argument("--log_dir", type=str, default="logs")
     parser.add_argument("--save_every", type=int, default=50_000)

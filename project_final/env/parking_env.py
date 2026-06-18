@@ -72,7 +72,7 @@ class ParkingEnv(gym.Env):
     def __init__(
         self,
         discrete: bool = False,
-        noise_std: float = 0.0,
+        noise_std: float = 0.02,
         max_steps: int = 200,
         n_other_vehicles: int = 6,
         obstacle_dist_scale: float = 10.0,
